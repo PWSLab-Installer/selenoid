@@ -1,0 +1,77 @@
+- hosts: localhost
+  connection: local
+
+  vars:
+    pip_install_packages:
+      - name: docker
+
+  tasks:
+      
+    - name: Install Role PIP
+      local_action: command ansible-galaxy install -f geerlingguy.pip 
+
+    - name: Install Role Docker
+      local_action: command ansible-galaxy install -f geerlingguy.docker
+
+    - name: Check if PIP is already installed
+      stat: path=/usr/bin/pip
+      register: pip_exists
+
+    - name: Check if Docker is already installed
+      stat: path=/usr/bin/docker
+      register: docker_exists
+
+    - name: Applying role PIP
+      command: mv ~/.ansible/roles/geerlingguy.pip ~/.ansible/roles/pwslab.pip
+      when: not pip_exists.stat.exists
+      ignore_errors: yes
+
+    - name: Applying role Docker
+      command: mv ~/.ansible/roles/geerlingguy.docker ~/.ansible/roles/pwslab.docker
+      when: not docker_exists.stat.exists
+      ignore_errors: yes
+
+    - name: Check the version of CentOS
+      command: cat /etc/centos-release
+      register: cent_os
+      ignore_errors: yes
+
+    - name: Check if version of Ubuntu
+      shell: |
+        lsb_release -d
+      register: ubuntu_os
+      ignore_errors: yes
+
+    - name: Applying replacement on 20.04 or 8
+      lineinfile:
+          dest: ~/.ansible/roles/pwslab.pip/defaults/main.yml
+          regexp: '^pip_package: '
+          line: 'pip_package: python3-pip'
+          state: present
+      when:
+        - cent_os.stdout | regex_search("8") or ubuntu_os.stdout | regex_search("20.04")
+
+    - name: Installing PIP
+      include_role:
+        name: pwslab.pip
+      when: not pip_exists.stat.exists
+    
+    - name: Installing Docker
+      include_role:
+          name: pwslab.docker
+      when: not docker_exists.stat.exists
+
+    - name: executing cm_install
+      shell: curl -s https://aerokube.com/cm/bash | bash
+      args:
+        chdir: ~/
+  
+
+    - name: Bining
+      command: mv ~/cm /usr/bin
+
+    - name: Starting VNC
+      command: cm selenoid start --vnc
+
+    - name: Starting UI
+      command: cm selenoid-ui start
